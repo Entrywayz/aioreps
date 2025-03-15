@@ -1,5 +1,4 @@
 aiogram
 aiocron
 aiosqlite
-pydantic
-pydantic_settings
+python-dotenv
