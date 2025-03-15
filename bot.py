@@ -11,17 +11,21 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 
+# === Загрузка переменных окружения ===
 load_dotenv()
 TOKEN = getenv("BOT_TOKEN")
 ADMINS = list(map(int, getenv("ADMINS", "").split(","))) if getenv("ADMINS") else []
 DB_PATH = getenv("DB_PATH", "reports.db")
 EMPLOYEE_CODE = getenv("EMPLOYEE_CODE")
 
+# === Настройка логирования ===
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+# === Инициализация бота ===
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
+# === Инициализация базы данных ===
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
@@ -41,6 +45,7 @@ async def init_db():
             )""")
         await db.commit()
 
+# === Команда /start ===
 @dp.message(Command("start"))
 async def start_command(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -60,6 +65,7 @@ async def start_command(message: types.Message, state: FSMContext):
         await message.answer("🔒 Введите код сотрудника для регистрации:")
         await state.set_state("waiting_for_code")
 
+# === Регистрация сотрудника ===
 @dp.message(state="waiting_for_code")
 async def process_registration_code(message: types.Message, state: FSMContext):
     if message.text == EMPLOYEE_CODE:
@@ -75,11 +81,13 @@ async def process_registration_code(message: types.Message, state: FSMContext):
     else:
         await message.answer("❌ Неверный код сотрудника. Попробуйте ещё раз.")
 
+# === Проверка регистрации пользователя ===
 async def is_registered(user_id: int) -> bool:
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,)) as cursor:
             return await cursor.fetchone() is not None
 
+# === Команда /отчет ===
 @dp.message(Command("отчет"))
 async def start_report(message: types.Message, state: FSMContext):
     if await is_registered(message.from_user.id):
@@ -88,14 +96,15 @@ async def start_report(message: types.Message, state: FSMContext):
     else:
         await message.answer("🚫 Вы не зарегистрированы. Введите /start и пройдите регистрацию.")
 
-@dp.message(state="waiting_for_photo_or_text", F.photo)
+# === Обработка отчётов ===
+@dp.message(F.photo, state="waiting_for_photo_or_text")
 async def receive_photo(message: types.Message, state: FSMContext):
     await state.update_data(photo_id=message.photo[-1].file_id)
     await message.answer("✍ Напишите описание задания (или отправьте без текста):")
     await state.set_state("waiting_for_text")
 
-@dp.message(state="waiting_for_text", F.text)
-@dp.message(state="waiting_for_photo_or_text", F.text)
+@dp.message(F.text, state="waiting_for_text")
+@dp.message(F.text, state="waiting_for_photo_or_text")
 async def receive_text(message: types.Message, state: FSMContext):
     data = await state.get_data()
     photo_id = data.get('photo_id')
@@ -114,6 +123,7 @@ async def receive_text(message: types.Message, state: FSMContext):
     await message.answer("✅ Ваш отчёт сохранён.")
     await state.clear()
 
+# === Команда /admin_reports (только для админов) ===
 @dp.message(Command("admin_reports"))
 async def send_reports_now(message: types.Message):
     if message.from_user.id not in ADMINS:
@@ -142,6 +152,7 @@ async def send_reports_now(message: types.Message):
         else:
             await message.answer(caption)
 
+# === Автоматическая отправка отчёта в воскресенье в 00:00 ===
 @aiocron.crontab("0 0 * * 0")
 async def scheduled_reports():
     start_of_week = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime("%d.%m.%Y")
