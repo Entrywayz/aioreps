@@ -65,7 +65,6 @@ async def start_command(message: types.Message, state: FSMContext):
 
 @dp.message(StateFilter("waiting_for_code"))
 async def process_registration_code(message: types.Message, state: FSMContext):
-    EMPLOYEE_CODES = {"12345", "67890"}  # Можно вынести в .env или БД
     if message.text in EMPLOYEE_CODES:
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("INSERT INTO users (user_id, full_name) VALUES (?, ?)", 
