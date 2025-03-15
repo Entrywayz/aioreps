@@ -17,7 +17,10 @@ load_dotenv()
 TOKEN = getenv("BOT_TOKEN")
 ADMINS = list(map(int, getenv("ADMINS", "").split(","))) if getenv("ADMINS") else []
 DB_PATH = getenv("DB_PATH", "reports.db")
-EMPLOYEE_CODE = str(getenv("EMPLOYEE_CODE"))
+EMPLOYEE_CODE = str(getenv("EMPLOYEE_CODE"))  # Убедимся, что это строка
+
+# Логирование для проверки
+logging.info(f"Код сотрудника из .env: {EMPLOYEE_CODE}")
 
 # === Настройка логирования ===
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -105,11 +108,20 @@ async def init_db():
             )""")
         await db.commit()
 
+# === Функция получения списка сотрудников ===
+async def get_employees():
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT user_id, full_name, position FROM users") as cursor:
+            employees = await cursor.fetchall()
+    return employees
+
 # === Команда /start ===
 @dp.message(Command("start"))
 async def start_command(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     full_name = message.from_user.full_name
+
+    logging.info(f"Пользователь {full_name} (ID: {user_id}) нажал /start")
 
     if user_id in ADMINS:
         await message.answer(f"👋 Добро пожаловать, админ {full_name}!", reply_markup=get_admin_keyboard())
@@ -128,7 +140,8 @@ async def start_command(message: types.Message, state: FSMContext):
 # === Регистрация сотрудника ===
 @dp.message(F.text, StateFilter("waiting_for_code"))
 async def process_registration_code(message: types.Message, state: FSMContext):
-    if message.text == EMPLOYEE_CODE:
+    user_input = message.text.strip()  # Убираем лишние пробелы
+    if user_input == EMPLOYEE_CODE:  # Сравниваем с кодом из .env
         user_id = message.from_user.id
         full_name = message.from_user.full_name
 
@@ -137,7 +150,7 @@ async def process_registration_code(message: types.Message, state: FSMContext):
             await db.commit()
 
         await message.answer(f"✅ Добро пожаловать, {full_name}!", reply_markup=get_employee_keyboard())
-        await state.clear()
+        await state.clear()  # Очищаем состояние
     else:
         await message.answer("❌ Неверный код сотрудника. Попробуйте ещё раз.")
 
