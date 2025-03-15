@@ -52,7 +52,7 @@ async def start_command(message: types.Message, state: FSMContext):
     full_name = message.from_user.full_name
 
     if user_id in ADMINS:
-        await message.answer(f"👋 Добро пожаловать, админ {full_name}!\n\nВы можете использовать команду:\n📊 /admin_reports — Просмотр отчётов.")
+        await message.answer(f"👋 Добро пожаловать, админ {full_name}!\n\n📊 /admin_reports — Просмотр отчётов.")
         return
 
     async with aiosqlite.connect(DB_PATH) as db:
@@ -66,7 +66,7 @@ async def start_command(message: types.Message, state: FSMContext):
         await state.set_state("waiting_for_code")
 
 # === Регистрация сотрудника ===
-@dp.message(state="waiting_for_code")
+@dp.message(F.text, state="waiting_for_code")
 async def process_registration_code(message: types.Message, state: FSMContext):
     if message.text == EMPLOYEE_CODE:
         user_id = message.from_user.id
@@ -76,7 +76,7 @@ async def process_registration_code(message: types.Message, state: FSMContext):
             await db.execute("INSERT INTO users (user_id, full_name) VALUES (?, ?)", (user_id, full_name))
             await db.commit()
 
-        await message.answer(f"✅ Добро пожаловать, {full_name}!\n\nВы можете использовать команду:\n📝 /отчет — Отправить отчёт")
+        await message.answer(f"✅ Добро пожаловать, {full_name}!\n\n📝 /отчет — Отправить отчёт")
         await state.clear()
     else:
         await message.answer("❌ Неверный код сотрудника. Попробуйте ещё раз.")
@@ -97,14 +97,13 @@ async def start_report(message: types.Message, state: FSMContext):
         await message.answer("🚫 Вы не зарегистрированы. Введите /start и пройдите регистрацию.")
 
 # === Обработка отчётов ===
-@dp.message(state="waiting_for_photo_or_text", F.photo)
+@dp.message(F.photo, state="waiting_for_photo_or_text")
 async def receive_photo(message: types.Message, state: FSMContext):
     await state.update_data(photo_id=message.photo[-1].file_id)
     await message.answer("✍ Напишите описание задания (или отправьте без текста):")
     await state.set_state("waiting_for_text")
 
-@dp.message(state="waiting_for_text", F.text)
-@dp.message(state="waiting_for_photo_or_text", F.text)
+@dp.message(F.text, state=["waiting_for_text", "waiting_for_photo_or_text"])
 async def receive_text(message: types.Message, state: FSMContext):
     data = await state.get_data()
     photo_id = data.get('photo_id')
