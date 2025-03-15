@@ -66,7 +66,7 @@ async def start_command(message: types.Message, state: FSMContext):
         await state.set_state("waiting_for_code")
 
 # === Регистрация сотрудника ===
-@dp.message(F.text, state="waiting_for_code")
+@dp.message(F.text, StateFilter("waiting_for_code"))
 async def process_registration_code(message: types.Message, state: FSMContext):
     if message.text == EMPLOYEE_CODE:
         user_id = message.from_user.id
@@ -97,13 +97,13 @@ async def start_report(message: types.Message, state: FSMContext):
         await message.answer("🚫 Вы не зарегистрированы. Введите /start и пройдите регистрацию.")
 
 # === Обработка отчётов ===
-@dp.message(F.photo, state="waiting_for_photo_or_text")
+@dp.message(F.photo, StateFilter("waiting_for_photo_or_text"))
 async def receive_photo(message: types.Message, state: FSMContext):
     await state.update_data(photo_id=message.photo[-1].file_id)
     await message.answer("✍ Напишите описание задания (или отправьте без текста):")
     await state.set_state("waiting_for_text")
 
-@dp.message(F.text, state=["waiting_for_text", "waiting_for_photo_or_text"])
+@dp.message(F.text, StateFilter("waiting_for_text", "waiting_for_photo_or_text"))
 async def receive_text(message: types.Message, state: FSMContext):
     data = await state.get_data()
     photo_id = data.get('photo_id')
@@ -164,5 +164,5 @@ async def main():
     await init_db()
     await dp.start_polling(bot)
 
-if name == "__main__":
+if __name__ == "__main__":
     asyncio.run(main())
