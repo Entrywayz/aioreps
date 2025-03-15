@@ -14,7 +14,7 @@ from aiogram.filters.state import StateFilter
 
 # Загрузка переменных окружения
 load_dotenv()
-EMPLOYEE_CODES = getenv("EMPLOYEE_CODES", "").split(",")  # Коды сотрудников
+EMPLOYEE_CODES = getenv("EMPLOYEE_CODES").split(",")  # Коды сотрудников
 TOKEN = getenv("BOT_TOKEN")  # Токен бота
 ADMINS = list(map(int, getenv("ADMINS", "").split(","))) if getenv("ADMINS") else []  # ID админов
 DB_PATH = getenv("DB_PATH", "reports.db")  # Путь к базе данных
