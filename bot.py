@@ -17,7 +17,7 @@ load_dotenv()
 TOKEN = getenv("BOT_TOKEN")
 ADMINS = list(map(int, getenv("ADMINS", "").split(","))) if getenv("ADMINS") else []
 DB_PATH = getenv("DB_PATH", "reports.db")
-EMPLOYEE_CODE = getenv("EMPLOYEE_CODE")
+EMPLOYEE_CODE = str(getenv("EMPLOYEE_CODE"))
 
 # === Настройка логирования ===
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
