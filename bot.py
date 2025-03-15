@@ -13,6 +13,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.filters.state import StateFilter
 
 load_dotenv()
+EMPLOYEE_CODES = getenv("EMPLOYEE_CODES")
 TOKEN = getenv("BOT_TOKEN")
 ADMINS = list(map(int, getenv("ADMINS", "").split(",")))  # Разбиваем ID админов через запятую
 DB_PATH = getenv("DB_PATH", "reports.db")
