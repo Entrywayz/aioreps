@@ -10,14 +10,13 @@ from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.filters.state import StateFilter
 
-# === Загружаем конфигурацию из .env ===
 load_dotenv()
 TOKEN = getenv("BOT_TOKEN")
 ADMINS = list(map(int, getenv("ADMINS", "").split(",")))  # Разбиваем ID админов через запятую
 DB_PATH = getenv("DB_PATH", "reports.db")
 
-# === Настройка логирования ===
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -50,7 +49,6 @@ async def init_db():
     logging.info("База данных успешно инициализирована.")
 
 
-# === Регистрация сотрудников ===
 @dp.message(Command("start"))
 async def start_command(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -65,7 +63,7 @@ async def start_command(message: types.Message, state: FSMContext):
         await state.set_state("waiting_for_code")
 
 
-@dp.message(state="waiting_for_code")
+@dp.message(StateFilter("waiting_for_code"))
 async def process_registration_code(message: types.Message, state: FSMContext):
     EMPLOYEE_CODES = {"12345", "67890"}  # Можно вынести в .env или БД
     if message.text in EMPLOYEE_CODES:
@@ -87,7 +85,6 @@ async def is_registered(user_id: int) -> bool:
             return await cursor.fetchone() is not None
 
 
-# === FSM для загрузки отчёта ===
 class ReportState(StatesGroup):
     waiting_for_photo_or_text = State()
     waiting_for_text = State()
@@ -131,7 +128,6 @@ async def receive_text(message: types.Message, state: FSMContext):
     await state.clear()
 
 
-# === Просмотр отчётов администраторами ===
 @dp.message(Command("admin_reports"))
 async def send_reports_now(message: types.Message):
     if message.from_user.id not in ADMINS:
@@ -157,12 +153,10 @@ async def send_reports_now(message: types.Message):
         else:
             await message.answer(caption)
 
-
-# === Запуск бота ===
 async def main():
     await init_db()
     await dp.start_polling(bot)
 
 
-if name == "__main__":
+if __name__ == "__main__":
     asyncio.run(main())
