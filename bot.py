@@ -1,25 +1,35 @@
 import asyncio
-import aiocron
+import logging
 import aiosqlite
-from datetime import datetime, timedelta
-from aiogram import Bot, Dispatcher, types
+import aiocron
+from datetime import datetime
+from os import getenv
+from dotenv import load_dotenv
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
 from aiogram.fsm.storage.memory import MemoryStorage
-from config_reader import config
 
-TOKEN = config.bot_token.get_secret_value()
-ADMINS = [config.admin_id1.get_secret_value(), config.admin_id2.get_secret_value()]
-EMPLOYEE_CODES = config.employee_codes.get_secret_value()
-DB_PATH = "reports.db"
+# === Загружаем конфигурацию из .env ===
+load_dotenv()
+TOKEN = getenv("BOT_TOKEN")
+ADMINS = list(map(int, getenv("ADMINS", "").split(",")))  # Разбиваем ID админов через запятую
+DB_PATH = getenv("DB_PATH", "reports.db")
 
-bot = Bot(token=config.bot_token.get_secret_value())
-storage = MemoryStorage()
-dp = Dispatcher(storage=storage)
+# === Настройка логирования ===
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("bot.log"), logging.StreamHandler()]
+)
 
+bot = Bot(token=TOKEN)
+dp = Dispatcher(storage=MemoryStorage())
+
+# === Инициализация базы данных ===
 async def init_db():
+    logging.info("Инициализация базы данных...")
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -30,14 +40,19 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                report_text TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                photo_id TEXT,
+                report_text TEXT,
                 report_date TEXT NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             )""")
         await db.commit()
+    logging.info("База данных успешно инициализирована.")
 
+
+# === Регистрация сотрудников ===
 @dp.message(Command("start"))
-async def start_command(message: Message, state: FSMContext):
+async def start_command(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT full_name FROM users WHERE user_id = ?", (user_id,)) as cursor:
@@ -47,133 +62,107 @@ async def start_command(message: Message, state: FSMContext):
         await message.answer(f"✅ Вы уже зарегистрированы как {user[0]}. Используйте /отчет.")
     else:
         await message.answer("🔒 Введите ваш код сотрудника для регистрации:")
-        await state.set_state(RegistrationState.waiting_for_code)
+        await state.set_state("waiting_for_code")
 
-class RegistrationState(StatesGroup):
-    waiting_for_code = State()
 
-@dp.message(RegistrationState.waiting_for_code)
-async def process_registration_code(message: Message, state: FSMContext):
+@dp.message(state="waiting_for_code")
+async def process_registration_code(message: types.Message, state: FSMContext):
+    EMPLOYEE_CODES = {"12345", "67890"}  # Можно вынести в .env или БД
     if message.text in EMPLOYEE_CODES:
         async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute(
-                "INSERT INTO users (user_id, full_name) VALUES (?, ?)",
-                (message.from_user.id, message.from_user.full_name),
-            )
+            await db.execute("INSERT INTO users (user_id, full_name) VALUES (?, ?)", 
+                             (message.from_user.id, message.from_user.full_name))
             await db.commit()
 
-        await message.answer("✅ Вы успешно зарегистрированы! Теперь вы можете отправлять отчёты с /отчет.")
+        logging.info(f"Пользователь {message.from_user.id} зарегистрировался.")
+        await message.answer("✅ Вы зарегистрированы! Теперь вы можете отправлять отчёты с /отчет.")
         await state.clear()
     else:
         await message.answer("❌ Неверный код сотрудника. Попробуйте ещё раз.")
+
 
 async def is_registered(user_id: int) -> bool:
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,)) as cursor:
             return await cursor.fetchone() is not None
 
+
+# === FSM для загрузки отчёта ===
 class ReportState(StatesGroup):
-    writing = State()
+    waiting_for_photo_or_text = State()
+    waiting_for_text = State()
+
 
 @dp.message(Command("отчет"))
-async def start_report(message: Message, state: FSMContext):
+async def start_report(message: types.Message, state: FSMContext):
     if await is_registered(message.from_user.id):
-        await message.answer("📝 Введите ваш отчёт за сегодня:")
-        await state.set_state(ReportState.writing)
+        await message.answer("📸 Отправьте фото задания или просто напишите текст отчёта:")
+        await state.set_state(ReportState.waiting_for_photo_or_text)
     else:
         await message.answer("🚫 Вы не зарегистрированы. Введите /start и пройдите регистрацию.")
 
-@dp.message(ReportState.writing)
-async def collect_report(message: Message, state: FSMContext):
-    today = datetime.now().strftime("%Y-%m-%d")
+
+@dp.message(ReportState.waiting_for_photo_or_text, F.photo)
+async def receive_photo(message: types.Message, state: FSMContext):
+    await state.update_data(photo_id=message.photo[-1].file_id)
+    await message.answer("✍️ Теперь напишите описание задания (или отправьте без текста):")
+    await state.set_state(ReportState.waiting_for_text)
+
+
+@dp.message(ReportState.waiting_for_text, F.text)
+@dp.message(ReportState.waiting_for_photo_or_text, F.text)
+async def receive_text(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    photo_id = data.get('photo_id')
+    report_text = message.text
+    user_id = message.from_user.id
+    full_name = message.from_user.full_name
+    today = datetime.now().strftime("%d.%m.%Y")
 
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "INSERT INTO reports (user_id, report_text, report_date) VALUES (?, ?, ?)",
-            (message.from_user.id, message.text, today),
+            "INSERT INTO reports (user_id, full_name, photo_id, report_text, report_date) VALUES (?, ?, ?, ?, ?)",
+            (user_id, full_name, photo_id, report_text, today)
         )
         await db.commit()
 
+    logging.info(f"Пользователь {user_id} отправил отчёт за {today}.")
     await message.answer("✅ Ваш отчёт сохранён.")
     await state.clear()
 
+
+# === Просмотр отчётов администраторами ===
 @dp.message(Command("admin_reports"))
-async def send_reports_now(message: Message):
+async def send_reports_now(message: types.Message):
     if message.from_user.id not in ADMINS:
         await message.answer("🚫 У вас нет доступа.")
         return
 
-    args = message.text.split()
-    target_date = datetime.now()
-
-    if len(args) >= 2:
-        try:
-            target_date = datetime.strptime(args[1], "%Y-%m-%d")
-        except ValueError:
-            await message.answer("❌ Неверный формат даты. Используйте YYYY-MM-DD.")
-            return
-
-    report_text = await format_reports(target_date)
-    await message.answer(report_text if report_text else "❌ Нет отчётов за этот период.", parse_mode="HTML")
-
-async def format_reports(date: datetime):
-    start_of_week = date - timedelta(days=date.weekday())
-    end_of_week = start_of_week + timedelta(days=6)
-    start_str = start_of_week.strftime("%Y-%m-%d")
-    end_str = end_of_week.strftime("%Y-%m-%d")
-
     async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            """SELECT u.full_name, r.report_text, r.report_date 
-               FROM reports r 
-               JOIN users u ON r.user_id = u.user_id 
-               WHERE r.report_date BETWEEN ? AND ? 
-               ORDER BY u.full_name, r.report_date""",
-            (start_str, end_str),
-        ) as cursor:
-            rows = await cursor.fetchall()
+        async with db.execute("SELECT full_name, photo_id, report_text, report_date FROM reports") as cursor:
+            reports = await cursor.fetchall()
 
-    if not rows:
-        return None
+    if not reports:
+        await message.answer("📭 Нет отчётов.")
+        return
 
-    reports_by_user = {}
-    for full_name, report_text, report_date in rows:
-        if full_name not in reports_by_user:
-            reports_by_user[full_name] = {}
-        if report_date not in reports_by_user[full_name]:
-            reports_by_user[full_name][report_date] = []
-        reports_by_user[full_name][report_date].append(report_text)
+    for report in reports:
+        full_name, photo_id, report_text, report_date = report
+        caption = f"👤 {full_name}\n📅 {report_date}"
+        if report_text:
+            caption += f"\n📝 {report_text}"
 
-    report_lines = []
-    for full_name, dates in reports_by_user.items():
-        user_lines = [f"👤 <b>{full_name}</b>"]
-        for date in sorted(dates.keys()):
-            reports = dates[date]
-            date_reports = "\n".join([f"  ◦ {report}" for report in reports])
-            user_lines.append(f"📅 <i>{date}</i>:\n{date_reports}")
-        report_lines.append("\n".join(user_lines))
+        if photo_id:
+            await bot.send_photo(message.chat.id, photo=photo_id, caption=caption)
+        else:
+            await message.answer(caption)
 
-    return "\n\n".join(report_lines)
 
-async def schedule_cron_jobs():
-    @aiocron.crontab("0 0 * * 0")
-    async def weekly_report_cron():
-        now = datetime.now()
-        report_text = await format_reports(now)
-        for admin_id in ADMINS:
-            await bot.send_message(
-                admin_id, 
-                report_text if report_text else "Нет отчетов за прошедшую неделю.",
-                parse_mode="HTML"
-            )
-
+# === Запуск бота ===
 async def main():
     await init_db()
-    await schedule_cron_jobs()
-    try:
-        await dp.start_polling(bot)
-    finally:
-        await bot.session.close()
+    await dp.start_polling(bot)
 
-if __name__ == "__main__":
+
+if name == "__main__":
     asyncio.run(main())
