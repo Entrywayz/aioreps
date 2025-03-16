@@ -49,8 +49,7 @@ def get_admin_keyboard():
         keyboard=[
             [KeyboardButton(text="📊 Посмотреть Отчеты")],
             [KeyboardButton(text="📌 Отправить Задачи")],
-            [KeyboardButton(text="🏆 Рейтинг Сотрудников")],
-            [KeyboardButton(text="🔙 Назад")]
+            [KeyboardButton(text="🏆 Рейтинг Сотрудников")]
         ],
         resize_keyboard=True
     )
@@ -304,6 +303,62 @@ async def employee_rating(message: types.Message):
         response += f"{idx}. {full_name}: {report_count} отчётов\n"
 
     await message.answer(response)
+
+# === Отправить Задачи (Админ) ===
+@dp.message(F.text == "📌 Отправить Задачи")
+async def send_tasks(message: types.Message, state: FSMContext):
+    if message.from_user.id not in ADMINS:
+        return
+
+    employees = await get_employees()
+    if not employees:
+        await message.answer("📭 Нет сотрудников в базе данных.")
+        return
+
+    await message.answer("📌 Выберите тип задачи:", reply_markup=get_task_type_keyboard())
+    await state.set_state("waiting_for_task_type")
+
+@dp.message(F.text, StateFilter("waiting_for_task_type"))
+async def select_task_type(message: types.Message, state: FSMContext):
+    task_type = message.text
+    await state.update_data(task_type=task_type)
+    await message.answer("📝 Введите текст задачи:")
+    await state.set_state("waiting_for_task_text")
+
+@dp.message(F.text, StateFilter("waiting_for_task_text"))
+async def select_task_text(message: types.Message, state: FSMContext):
+    task_text = message.text
+    data = await state.get_data()
+    task_type = data["task_type"]
+
+    employees = await get_employees()
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=full_name)] for _, full_name, _ in employees],
+        resize_keyboard=True
+    )
+    await message.answer("👤 Выберите сотрудника:", reply_markup=keyboard)
+    await state.update_data(task_text=task_text, task_type=task_type)
+    await state.set_state("waiting_for_employee")
+
+@dp.message(F.text, StateFilter("waiting_for_employee"))
+async def assign_task(message: types.Message, state: FSMContext):
+    full_name = message.text
+    data = await state.get_data()
+    task_type = data["task_type"]
+    task_text = data["task_text"]
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT user_id FROM users WHERE full_name = ?", (full_name,)) as cursor:
+            user_id = (await cursor.fetchone())[0]
+
+        await db.execute(
+            "INSERT INTO tasks (user_id, task_type, task_text, task_date) VALUES (?, ?, ?, ?)",
+            (user_id, task_type, task_text, datetime.now().strftime("%d.%m.%Y"))
+        )
+        await db.commit()
+
+    await message.answer(f"✅ Задача успешно назначена сотруднику {full_name}.", reply_markup=get_admin_keyboard())
+    await state.clear()
 
 # === Кнопка "Назад" ===
 @dp.message(F.text == "🔙 Назад")
