@@ -2,6 +2,7 @@ import asyncio
 import logging
 import aiosqlite
 import aiocron
+import random
 from datetime import datetime, timedelta
 from os import getenv
 from dotenv import load_dotenv
@@ -36,7 +37,9 @@ def get_employee_keyboard():
             [KeyboardButton(text="📝 Отправить Отчет")],
             [KeyboardButton(text="📊 Мои Отчеты")],
             [KeyboardButton(text="👤 Личный Кабинет")],
-            [KeyboardButton(text="📌 Мои Задачи")]
+            [KeyboardButton(text="📌 Мои Задачи")],
+            [KeyboardButton(text="💪 Мотивация")],
+            [KeyboardButton(text="🔙 Назад")]
         ],
         resize_keyboard=True
     )
@@ -45,7 +48,9 @@ def get_admin_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📊 Посмотреть Отчеты")],
-            [KeyboardButton(text="📌 Отправить Задачи")]
+            [KeyboardButton(text="📌 Отправить Задачи")],
+            [KeyboardButton(text="🏆 Рейтинг Сотрудников")],
+            [KeyboardButton(text="🔙 Назад")]
         ],
         resize_keyboard=True
     )
@@ -54,7 +59,8 @@ def get_report_period_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📅 Текущая Неделя")],
-            [KeyboardButton(text="📆 Выбрать Период")]
+            [KeyboardButton(text="📆 Выбрать Период")],
+            [KeyboardButton(text="🔙 Назад")]
         ],
         resize_keyboard=True
     )
@@ -63,7 +69,8 @@ def get_task_type_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📋 Основная Задача")],
-            [KeyboardButton(text="📋 Дополнительная Задача")]
+            [KeyboardButton(text="📋 Дополнительная Задача")],
+            [KeyboardButton(text="🔙 Назад")]
         ],
         resize_keyboard=True
     )
@@ -72,7 +79,8 @@ def get_approval_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="✅ Принять")],
-            [KeyboardButton(text="🔄 Отправить на Доработку")]
+            [KeyboardButton(text="🔄 Отправить на Доработку")],
+            [KeyboardButton(text="🔙 Назад")]
         ],
         resize_keyboard=True
     )
@@ -262,122 +270,50 @@ async def my_tasks(message: types.Message):
 
     await message.answer(response)
 
-# === Посмотреть Отчеты (Админ) ===
-@dp.message(F.text == "📊 Посмотреть Отчеты")
-async def view_reports(message: types.Message):
+# === Мотивация ===
+@dp.message(F.text == "💪 Мотивация")
+async def send_motivation(message: types.Message):
+    motivations = [
+        "Ты можешь больше, чем думаешь! 💪",
+        "Каждый день — это новый шанс стать лучше! 🌟",
+        "Не сдавайся! У тебя всё получится! 🚀",
+        "Ты — звезда! Сияй ярче! ✨",
+        "Маленькие шаги ведут к большим победам! 🏆"
+    ]
+    motivation = random.choice(motivations)
+    await message.answer(motivation)
+
+# === Рейтинг Сотрудников (Админ) ===
+@dp.message(F.text == "🏆 Рейтинг Сотрудников")
+async def employee_rating(message: types.Message):
     if message.from_user.id not in ADMINS:
         return
 
-    await message.answer("📊 Выберите период:", reply_markup=get_report_period_keyboard())
-
-@dp.message(F.text == "📅 Текущая Неделя")
-async def current_week_reports(message: types.Message):
-    if message.from_user.id not in ADMINS:
-        return
-
-    start_date = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime("%d.%m.%Y")
-    end_date = datetime.now().strftime("%d.%m.%Y")
-
-    await send_reports(message, start_date, end_date)
-
-@dp.message(F.text == "📆 Выбрать Период")
-async def select_period_reports(message: types.Message, state: FSMContext):
-    if message.from_user.id not in ADMINS:
-        return
-
-    await message.answer("📆 Введите период в формате: ДД.ММ.ГГГГ - ДД.ММ.ГГГГ")
-    await state.set_state("waiting_for_period")
-
-@dp.message(F.text, StateFilter("waiting_for_period"))
-async def process_period(message: types.Message, state: FSMContext):
-    try:
-        start_date, end_date = message.text.split(" - ")
-        await send_reports(message, start_date, end_date)
-        await state.clear()
-    except ValueError:
-        await message.answer("❌ Неверный формат! Используйте: ДД.ММ.ГГГГ - ДД.ММ.ГГГГ")
-
-async def send_reports(message: types.Message, start_date: str, end_date: str):
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT full_name, photo_id, report_text, report_date FROM reports WHERE report_date BETWEEN ? AND ? ORDER BY full_name",
-            (start_date, end_date)
+            "SELECT full_name, COUNT(*) as report_count FROM reports GROUP BY user_id ORDER BY report_count DESC"
         ) as cursor:
-            reports = await cursor.fetchall()
+            rating = await cursor.fetchall()
 
-    if not reports:
-        await message.answer(f"📭 Нет отчётов за период {start_date} - {end_date}.")
+    if not rating:
+        await message.answer("📭 Нет данных для формирования рейтинга.")
         return
 
-    grouped_reports = {}
-    for full_name, photo_id, report_text, report_date in reports:
-        if full_name not in grouped_reports:
-            grouped_reports[full_name] = []
-        entry = f"📅 {report_date}"
-        if report_text:
-            entry += f"\n📝 {report_text}"
-        grouped_reports[full_name].append((entry, photo_id))
+    response = "🏆 Рейтинг сотрудников по количеству отчётов:\n"
+    for idx, (full_name, report_count) in enumerate(rating, start=1):
+        response += f"{idx}. {full_name}: {report_count} отчётов\n"
 
-    for full_name, entries in grouped_reports.items():
-        caption = f"👤 {full_name}\n📊 Отчёты за {start_date} - {end_date}:\n"
-        for entry, photo_id in entries:
-            if photo_id:
-                await bot.send_photo(message.chat.id, photo=photo_id, caption=entry)
-            else:
-                caption += f"\n{entry}\n"
-        if caption.strip():
-            await message.answer(caption)
+    await message.answer(response)
 
-# === Отправить Задачи (Админ) ===
-@dp.message(F.text == "📌 Отправить Задачи")
-async def send_tasks(message: types.Message, state: FSMContext):
-    if message.from_user.id not in ADMINS:
-        return
+# === Кнопка "Назад" ===
+@dp.message(F.text == "🔙 Назад")
+async def back_button(message: types.Message):
+    user_id = message.from_user.id
 
-    await message.answer("📌 Выберите тип задачи:", reply_markup=get_task_type_keyboard())
-    await state.set_state("waiting_for_task_type")
-
-@dp.message(F.text, StateFilter("waiting_for_task_type"))
-async def select_task_type(message: types.Message, state: FSMContext):
-    task_type = message.text
-    await state.update_data(task_type=task_type)
-    await message.answer("📝 Введите текст задачи:")
-    await state.set_state("waiting_for_task_text")
-
-@dp.message(F.text, StateFilter("waiting_for_task_text"))
-async def select_task_text(message: types.Message, state: FSMContext):
-    task_text = message.text
-    data = await state.get_data()
-    task_type = data["task_type"]
-
-    employees = await get_employees()
-    keyboard = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=full_name)] for _, full_name, _ in employees],
-        resize_keyboard=True
-    )
-    await message.answer("👤 Выберите сотрудника:", reply_markup=keyboard)
-    await state.update_data(task_text=task_text, task_type=task_type)
-    await state.set_state("waiting_for_employee")
-
-@dp.message(F.text, StateFilter("waiting_for_employee"))
-async def assign_task(message: types.Message, state: FSMContext):
-    full_name = message.text
-    data = await state.get_data()
-    task_type = data["task_type"]
-    task_text = data["task_text"]
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT user_id FROM users WHERE full_name = ?", (full_name,)) as cursor:
-            user_id = (await cursor.fetchone())[0]
-
-        await db.execute(
-            "INSERT INTO tasks (user_id, task_type, task_text, task_date) VALUES (?, ?, ?, ?)",
-            (user_id, task_type, task_text, datetime.now().strftime("%d.%m.%Y"))
-        )
-        await db.commit()
-
-    await message.answer(f"✅ Задача успешно назначена сотруднику {full_name}.", reply_markup=get_admin_keyboard())
-    await state.clear()
+    if user_id in ADMINS:
+        await message.answer("Возвращаемся в главное меню.", reply_markup=get_admin_keyboard())
+    else:
+        await message.answer("Возвращаемся в главное меню.", reply_markup=get_employee_keyboard())
 
 # === Запуск бота ===
 async def main():
