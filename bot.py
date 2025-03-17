@@ -49,7 +49,8 @@ def get_admin_keyboard():
         keyboard=[
             [KeyboardButton(text="📊 Посмотреть Отчеты")],
             [KeyboardButton(text="📌 Отправить Задачи")],
-            [KeyboardButton(text="🏆 Рейтинг Сотрудников")]
+            [KeyboardButton(text="🏆 Рейтинг Сотрудников")],
+            [KeyboardButton(text="✅ Проверить Отчеты")]
         ],
         resize_keyboard=True
     )
@@ -359,6 +360,85 @@ async def assign_task(message: types.Message, state: FSMContext):
 
     await message.answer(f"✅ Задача успешно назначена сотруднику {full_name}.", reply_markup=get_admin_keyboard())
     await state.clear()
+
+# === Проверить Отчеты (Админ) ===
+@dp.message(F.text == "✅ Проверить Отчеты")
+async def check_reports(message: types.Message):
+    if message.from_user.id not in ADMINS:
+        return
+
+    start_date = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime("%d.%m.%Y")
+    end_date = datetime.now().strftime("%d.%m.%Y")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT full_name, photo_id, report_text, report_date FROM reports WHERE report_date BETWEEN ? AND ? ORDER BY full_name",
+            (start_date, end_date)
+        ) as cursor:
+            reports = await cursor.fetchall()
+
+    if not reports:
+        await message.answer("📭 Нет отчётов за текущую неделю.")
+        return
+
+    grouped_reports = {}
+    for full_name, photo_id, report_text, report_date in reports:
+        if full_name not in grouped_reports:
+            grouped_reports[full_name] = []
+        entry = f"📅 {report_date}"
+        if report_text:
+            entry += f"\n📝 {report_text}"
+        grouped_reports[full_name].append((entry, photo_id))
+
+    for full_name, entries in grouped_reports.items():
+        caption = f"👤 {full_name}\n📊 Отчёты за {start_date} - {end_date}:\n"
+        for entry, photo_id in entries:
+            if photo_id:
+                await bot.send_photo(message.chat.id, photo=photo_id, caption=entry)
+            else:
+                caption += f"\n{entry}\n"
+        if caption.strip():
+            await message.answer(caption)
+
+# === Автоматическая отправка отчетов в 00:00 с воскресенья на понедельник ===
+@aiocron.crontab("0 0 * * 0")
+async def scheduled_reports():
+    start_date = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime("%d.%m.%Y")
+    end_date = datetime.now().strftime("%d.%m.%Y")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT full_name, photo_id, report_text, report_date FROM reports WHERE report_date BETWEEN ? AND ? ORDER BY full_name",
+            (start_date, end_date)
+        ) as cursor:
+            reports = await cursor.fetchall()
+
+    if not reports:
+        for admin_id in ADMINS:
+            await bot.send_message(admin_id, "📭 На этой неделе отчётов нет.")
+        return
+
+    grouped_reports = {}
+    for full_name, photo_id, report_text, report_date in reports:
+        if full_name not in grouped_reports:
+            grouped_reports[full_name] = []
+        entry = f"📅 {report_date}"
+        if report_text:
+            entry += f"\n📝 {report_text}"
+        grouped_reports[full_name].append((entry, photo_id))
+
+    for admin_id in ADMINS:
+        await bot.send_message(admin_id, f"📊 Отчёты за неделю ({start_date} - {end_date}):")
+
+        for full_name, entries in grouped_reports.items():
+            caption = f"👤 {full_name}\n📊 Отчёты за неделю:\n"
+            for entry, photo_id in entries:
+                if photo_id:
+                    await bot.send_photo(admin_id, photo=photo_id, caption=entry)
+                else:
+                    caption += f"\n{entry}\n"
+            if caption.strip():
+                await bot.send_message(admin_id, caption)
 
 # === Кнопка "Назад" ===
 @dp.message(F.text == "🔙 Назад")
