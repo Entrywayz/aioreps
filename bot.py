@@ -102,6 +102,7 @@ async def init_db():
                 photo_id TEXT,
                 report_text TEXT,
                 report_date TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'На проверке',
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             )""")
         await db.execute("""
@@ -185,12 +186,12 @@ async def receive_text(message: types.Message, state: FSMContext):
 
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "INSERT INTO reports (user_id, full_name, photo_id, report_text, report_date) VALUES (?, ?, ?, ?, ?)",
-            (user_id, full_name, photo_id, report_text, today)
+            "INSERT INTO reports (user_id, full_name, photo_id, report_text, report_date, status) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, full_name, photo_id, report_text, today, "На проверке")
         )
         await db.commit()
 
-    await message.answer("✅ Ваш отчёт сохранён.", reply_markup=get_employee_keyboard())
+    await message.answer("✅ Ваш отчёт сохранён и отправлен на проверку.", reply_markup=get_employee_keyboard())
     await state.clear()
 
     # Уведомление админам о новом отчете
@@ -206,7 +207,7 @@ async def my_reports(message: types.Message):
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT report_date, report_text FROM reports WHERE user_id = ? AND report_date BETWEEN ? AND ?",
+            "SELECT report_date, report_text, status FROM reports WHERE user_id = ? AND report_date BETWEEN ? AND ?",
             (user_id, start_date, end_date)
         ) as cursor:
             reports = await cursor.fetchall()
@@ -216,8 +217,8 @@ async def my_reports(message: types.Message):
         return
 
     response = "📊 Ваши отчёты за текущую неделю:\n"
-    for report_date, report_text in reports:
-        response += f"📅 {report_date}\n📝 {report_text}\n\n"
+    for report_date, report_text, status in reports:
+        response += f"📅 {report_date}\n📝 {report_text}\n🔄 Статус: {status}\n\n"
 
     await message.answer(response)
 
@@ -305,150 +306,92 @@ async def employee_rating(message: types.Message):
 
     await message.answer(response)
 
-# === Отправить Задачи (Админ) ===
-@dp.message(F.text == "📌 Отправить Задачи")
-async def send_tasks(message: types.Message, state: FSMContext):
+# === Проверить Отчеты (Админ) ===
+@dp.message(F.text == "✅ Проверить Отчеты")
+async def check_reports(message: types.Message, state: FSMContext):
     if message.from_user.id not in ADMINS:
         return
 
-    employees = await get_employees()
-    if not employees:
-        await message.answer("📭 Нет сотрудников в базе данных.")
-        return
-
-    await message.answer("📌 Выберите тип задачи:", reply_markup=get_task_type_keyboard())
-    await state.set_state("waiting_for_task_type")
-
-@dp.message(F.text, StateFilter("waiting_for_task_type"))
-async def select_task_type(message: types.Message, state: FSMContext):
-    task_type = message.text
-    await state.update_data(task_type=task_type)
-    await message.answer("📝 Введите текст задачи:")
-    await state.set_state("waiting_for_task_text")
-
-@dp.message(F.text, StateFilter("waiting_for_task_text"))
-async def select_task_text(message: types.Message, state: FSMContext):
-    task_text = message.text
-    data = await state.get_data()
-    task_type = data["task_type"]
-
-    employees = await get_employees()
-    keyboard = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=full_name)] for _, full_name, _ in employees],
-        resize_keyboard=True
-    )
-    await message.answer("👤 Выберите сотрудника:", reply_markup=keyboard)
-    await state.update_data(task_text=task_text, task_type=task_type)
-    await state.set_state("waiting_for_employee")
-
-@dp.message(F.text, StateFilter("waiting_for_employee"))
-async def assign_task(message: types.Message, state: FSMContext):
-    full_name = message.text
-    data = await state.get_data()
-    task_type = data["task_type"]
-    task_text = data["task_text"]
+    start_date = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime("%d.%m.%Y")
+    end_date = datetime.now().strftime("%d.%m.%Y")
 
     async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT user_id FROM users WHERE full_name = ?", (full_name,)) as cursor:
-            user_id = (await cursor.fetchone())[0]
+        async with db.execute(
+            "SELECT id, full_name, photo_id, report_text, report_date FROM reports WHERE status = 'На проверке' AND report_date BETWEEN ? AND ? ORDER BY full_name",
+            (start_date, end_date)
+        ) as cursor:
+            reports = await cursor.fetchall()
 
+    if not reports:
+        await message.answer("📭 Нет отчётов на проверку.")
+        return
+
+    # Сохраняем отчеты в состояние для дальнейшей обработки
+    await state.update_data(reports=reports)
+    await message.answer("📊 Отчёты на проверку:", reply_markup=get_approval_keyboard())
+
+# === Обработка кнопок "Принять" и "Отправить на доработку" ===
+@dp.message(F.text == "✅ Принять")
+async def approve_report(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    reports = data.get("reports", [])
+
+    if not reports:
+        await message.answer("📭 Нет отчётов на проверку.")
+        return
+
+    report_id, full_name, photo_id, report_text, report_date = reports[0]
+
+    async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "INSERT INTO tasks (user_id, task_type, task_text, task_date) VALUES (?, ?, ?, ?)",
-            (user_id, task_type, task_text, datetime.now().strftime("%d.%m.%Y"))
+            "UPDATE reports SET status = 'Принят' WHERE id = ?",
+            (report_id,)
         )
         await db.commit()
 
-    await message.answer(f"✅ Задача успешно назначена сотруднику {full_name}.", reply_markup=get_admin_keyboard())
+    await message.answer(f"✅ Отчёт от {full_name} за {report_date} принят.")
     await state.clear()
 
-# === Проверить Отчеты (Админ) ===
-@dp.message(F.text == "✅ Проверить Отчеты")
-async def check_reports(message: types.Message):
-    if message.from_user.id not in ADMINS:
-        return
-
-    start_date = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime("%d.%m.%Y")
-    end_date = datetime.now().strftime("%d.%m.%Y")
-
+    # Уведомление сотруднику
     async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            "SELECT full_name, photo_id, report_text, report_date FROM reports WHERE report_date BETWEEN ? AND ? ORDER BY full_name",
-            (start_date, end_date)
-        ) as cursor:
-            reports = await cursor.fetchall()
+        async with db.execute("SELECT user_id FROM reports WHERE id = ?", (report_id,)) as cursor:
+            user_id = (await cursor.fetchone())[0]
+
+    await bot.send_message(user_id, f"✅ Ваш отчёт за {report_date} принят.")
+
+@dp.message(F.text == "🔄 Отправить на Доработку")
+async def send_for_revision(message: types.Message, state: FSMContext):
+    await message.answer("📝 Укажите причину для доработки:")
+    await state.set_state("waiting_for_revision_reason")
+
+@dp.message(F.text, StateFilter("waiting_for_revision_reason"))
+async def process_revision_reason(message: types.Message, state: FSMContext):
+    reason = message.text
+    data = await state.get_data()
+    reports = data.get("reports", [])
 
     if not reports:
-        await message.answer("📭 Нет отчётов за текущую неделю.")
+        await message.answer("📭 Нет отчётов на проверку.")
         return
 
-    grouped_reports = {}
-    for full_name, photo_id, report_text, report_date in reports:
-        if full_name not in grouped_reports:
-            grouped_reports[full_name] = []
-        entry = f"📅 {report_date}"
-        if report_text:
-            entry += f"\n📝 {report_text}"
-        grouped_reports[full_name].append((entry, photo_id))
-
-    for full_name, entries in grouped_reports.items():
-        caption = f"👤 {full_name}\n📊 Отчёты за {start_date} - {end_date}:\n"
-        for entry, photo_id in entries:
-            if photo_id:
-                await bot.send_photo(message.chat.id, photo=photo_id, caption=entry)
-            else:
-                caption += f"\n{entry}\n"
-        if caption.strip():
-            await message.answer(caption)
-
-# === Автоматическая отправка отчетов в 00:00 с воскресенья на понедельник ===
-@aiocron.crontab("0 0 * * 0")
-async def scheduled_reports():
-    start_date = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime("%d.%m.%Y")
-    end_date = datetime.now().strftime("%d.%m.%Y")
+    report_id, full_name, photo_id, report_text, report_date = reports[0]
 
     async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            "SELECT full_name, photo_id, report_text, report_date FROM reports WHERE report_date BETWEEN ? AND ? ORDER BY full_name",
-            (start_date, end_date)
-        ) as cursor:
-            reports = await cursor.fetchall()
+        await db.execute(
+            "UPDATE reports SET status = 'На доработке' WHERE id = ?",
+            (report_id,)
+        )
+        await db.commit()
 
-    if not reports:
-        for admin_id in ADMINS:
-            await bot.send_message(admin_id, "📭 На этой неделе отчётов нет.")
-        return
+    await message.answer(f"🔄 Отчёт от {full_name} за {report_date} отправлен на доработку.")
+    await state.clear()
 
-    grouped_reports = {}
-    for full_name, photo_id, report_text, report_date in reports:
-        if full_name not in grouped_reports:
-            grouped_reports[full_name] = []
-        entry = f"📅 {report_date}"
-        if report_text:
-            entry += f"\n📝 {report_text}"
-        grouped_reports[full_name].append((entry, photo_id))
+    # Уведомление сотруднику
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT user_id FROM reports WHERE id = ?", (report_id,)) as cursor:
+            user_id = (await cursor.fetchone())[0]
 
-    for admin_id in ADMINS:
-        await bot.send_message(admin_id, f"📊 Отчёты за неделю ({start_date} - {end_date}):")
-
-        for full_name, entries in grouped_reports.items():
-            caption = f"👤 {full_name}\n📊 Отчёты за неделю:\n"
-            for entry, photo_id in entries:
-                if photo_id:
-                    await bot.send_photo(admin_id, photo=photo_id, caption=entry)
-                else:
-                    caption += f"\n{entry}\n"
-            if caption.strip():
-                await bot.send_message(admin_id, caption)
-
-# === Кнопка "Назад" ===
-@dp.message(F.text == "🔙 Назад")
-async def back_button(message: types.Message):
-    user_id = message.from_user.id
-
-    if user_id in ADMINS:
-        await message.answer("Возвращаемся в главное меню.", reply_markup=get_admin_keyboard())
-    else:
-        await message.answer("Возвращаемся в главное меню.", reply_markup=get_employee_keyboard())
+    await bot.send_message(user_id, f"🔄 Ваш отчёт за {report_date} отправлен на доработку. Причина: {reason}")
 
 # === Запуск бота ===
 async def main():
