@@ -30,15 +30,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-VIDEO_MESSAGES = {
-    "personal_cabinet": "lc.mp4",
-    "my_reports": "reports.mp4",
-    "reports": "report.mp4",
-    "tasks": "tasks.mp4",
-    "motivation": "motivation.mp4"
-}
-
-
 # === Клавиатуры ===
 def get_employee_keyboard():
     return ReplyKeyboardMarkup(
@@ -73,6 +64,14 @@ def get_report_period_keyboard():
         ],
         resize_keyboard=True
     )
+
+VIDEO_MESSAGES = {
+    "personal_cabinet": "lc.mp4",
+    "my_reports": "reports.mp4",
+    "reports": "report.mp4",
+    "tasks": "tasks.mp4",
+    "motivation": "motivation.mp4"
+}
 
 def get_task_type_keyboard():
     return ReplyKeyboardMarkup(
@@ -237,24 +236,26 @@ async def personal_cabinet(message: types.Message):
     user_id = message.from_user.id
     start_date = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime("%d.%m.%Y")
     end_date = datetime.now().strftime("%d.%m.%Y")
+
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             "SELECT COUNT(*) FROM reports WHERE user_id = ? AND report_date BETWEEN ? AND ?",
             (user_id, start_date, end_date)
         ) as cursor:
             submitted = (await cursor.fetchone())[0]
+
         start = datetime.strptime(start_date, "%d.%m.%Y")
         end = datetime.strptime(end_date, "%d.%m.%Y")
         total_days = (end - start).days + 1
         missed = total_days - submitted
-    response = (
+
+    capture = (
         f"👤 Личный Кабинет\n"
         f"📊 Ваша статистика за текущую неделю:\n"
         f"✅ Сдано отчётов: {submitted}\n"
         f"❌ Пропущено отчётов: {missed}"
     )
-    await send_video_message(user_id, "personal_cabinet", response)
-    await message.answer(response)
+    await bot.send_video_message(user_id, VIDEO_MESSAGES["personal_cabinet"], response)
 
 # === Мои Задачи ===
 @dp.message(F.text == "📌 Мои Задачи")
