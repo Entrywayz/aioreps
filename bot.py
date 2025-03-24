@@ -340,7 +340,7 @@ async def send_motivation(message: types.Message):
         "Маленькие шаги ведут к большим победам! 🏆"
     ]
     motivation = random.choice(motivations)
-    await message.answer(motivation)
+    await send_video(message, "motivation", motivation)
 
 # === Рейтинг Сотрудников (Админ) ===
 @dp.message(F.text == "🏆 Рейтинг Сотрудников")
