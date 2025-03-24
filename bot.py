@@ -34,7 +34,7 @@ dp = Dispatcher(storage=MemoryStorage())
 
 async def send_video(message: types.Message, video_key: str, caption: str = ""):
     """Универсальная функция для отправки видео"""
-    video_path = os.path.join(VIDEOS_DIR, VIDEO_FILES[video_key])
+    video_path = os.path.join(VIDEO_FILES[video_key])
     
     if not os.path.exists(video_path):
         logging.error(f"Видео файл не найден: {video_path}")
