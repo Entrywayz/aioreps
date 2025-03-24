@@ -20,8 +20,8 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemo
 load_dotenv()
 TOKEN = getenv("BOT_TOKEN")
 ADMINS = list(map(int, getenv("ADMINS", "").split(","))) if getenv("ADMINS") else []
-DB_PATH = getenv("DB_PATH", "reports.db")
-EMPLOYEE_CODE = str(getenv("EMPLOYEE_CODE"))  # Убедимся, что это строка
+DB_PATH = os.path.join(os.getcwd(), "reports.db")
+EMPLOYEE_CODE = str(getenv("EMPLOYEE_CODE"))
 
 # Логирование для проверки
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
