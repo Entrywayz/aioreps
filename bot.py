@@ -267,7 +267,8 @@ async def my_reports(message: types.Message):
             reports = await cursor.fetchall()
 
     if not reports:
-        await message.answer("📭 У вас нет отчётов за текущую неделю.")
+        resp = "📭 У вас нет отчётов за текущую неделю."
+        await send_video(message, "reports", resp)
         return
 
     response = "📊 Ваши отчёты за текущую неделю:\n"
