@@ -318,7 +318,8 @@ async def my_tasks(message: types.Message):
             tasks = await cursor.fetchall()
 
     if not tasks:
-        await message.answer("📭 У вас нет новых задач.")
+        resp = "📭 У вас нет новых задач."
+        await send_video(message, "tasks", resp)
         return
 
     response = "📌 Ваши задачи:\n"
