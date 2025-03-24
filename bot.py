@@ -31,22 +31,45 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
+VIDEO_FILES = {
+    "personal_cabinet": "lc.mp4",
+    "my_reports": "reports.mp4",
+    "reports": "report.mp4",
+    "tasks": "tasks.mp4",
+    "motivation": "motivation.mp4"
+}
 
-async def send_video(message: types.Message, video_key: str, caption: str = ""):
-    """Универсальная функция для отправки видео"""
-    video_path = os.path.join(VIDEO_FILES[video_key])
-    
-    if not os.path.exists(video_path):
-        logging.error(f"Видео файл не найден: {video_path}")
-        await message.answer("⚠ Видео временно недоступно")
-        return False
-    
+async def send_video(message: types.Message, video_key: str, caption: str = "") -> bool:
+    """
+    Отправляет видео из локального файла
+    :param message: Объект сообщения aiogram
+    :param video_key: Ключ из словаря VIDEO_FILES
+    :param caption: Подпись к видео
+    :return: True если отправка успешна, False если возникла ошибка
+    """
     try:
+        # Получаем путь к текущей директории
+        current_dir = Path(__file__).parent
+        video_filename = VIDEO_FILES.get(video_key)
+        
+        if not video_filename:
+            logging.error(f"Неизвестный ключ видео: {video_key}")
+            return False
+            
+        video_path = current_dir / video_filename
+        
+        if not video_path.exists():
+            logging.error(f"Видео файл не найден: {video_path}")
+            await message.answer("⚠ Видео временно недоступно")
+            return False
+        
+        # Отправляем видео
         video = InputFile(video_path)
         await message.answer_video(video, caption=caption)
         return True
+        
     except Exception as e:
-        logging.error(f"Ошибка при отправке видео: {e}")
+        logging.error(f"Ошибка при отправке видео {video_key}: {str(e)}")
         await message.answer(f"⚠ Не удалось отправить видео. {caption}")
         return False
 
