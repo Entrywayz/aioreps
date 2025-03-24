@@ -1,6 +1,9 @@
 import asyncio
 import logging
 import aiosqlite
+import asyncio
+import logging
+import aiosqlite
 import os
 import aiocron
 import random
@@ -15,7 +18,7 @@ from aiogram.types import FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
-from aiogram.enums.parse_mode import ParseMode
+from aiogram.enums import ParseMode
 
 # === Загрузка переменных окружения ===
 load_dotenv()
@@ -33,7 +36,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # === Инициализация бота ===
-bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+bot = Bot(token=TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
 
 # Пути к видеофайлам
