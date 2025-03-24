@@ -274,7 +274,7 @@ async def my_reports(message: types.Message):
     for report_date, report_text, status in reports:
         response += f"📅 {report_date}\n📝 {report_text}\n🔄 Статус: {status}\n\n"
 
-    await message.answer(response)
+    await send_video(message, "reports", response)
 
 @dp.message(F.text == "👤 Личный Кабинет")
 async def personal_cabinet(message: types.Message):
