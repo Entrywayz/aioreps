@@ -220,7 +220,8 @@ async def process_registration_code(message: types.Message, state: FSMContext):
 # === Отправить Отчет ===
 @dp.message(F.text == "📝 Отправить Отчет")
 async def send_report(message: types.Message, state: FSMContext):
-    await message.answer("📸 Отправьте фото задания или просто напишите текст отчёта:")
+    res = "📸 Отправьте фото задания или просто напишите текст отчёта:"
+    await send_video(message, "motivation", res)
     await state.set_state("waiting_for_photo_or_text")
 
 @dp.message(F.photo, StateFilter("waiting_for_photo_or_text"))
