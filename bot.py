@@ -23,7 +23,7 @@ load_dotenv()
 TOKEN = getenv("BOT_TOKEN")
 ADMINS = list(map(int, getenv("ADMINS", "").split(","))) if getenv("ADMINS") else []
 DB_PATH = getenv("DB_PATH", "reports.db")
-EMPLOYEE_CODE = str(getenv("EMPLOYEE_CODE", "0000"))
+EMPLOYEE_CODE = str(getenv("EMPLOYEE_CODE"))
 
 # Логирование для проверки
 logging.basicConfig(
