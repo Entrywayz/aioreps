@@ -2,3 +2,4 @@ aiogram
 aiocron
 aiosqlite
 python-dotenv
+pathlib
