@@ -16,24 +16,28 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from aiogram.utils.markdown import html_decoration as hd
+from aiogram.client.default import DefaultBotProperties  # Добавлено для aiogram 3.x
 
 # === Загрузка переменных окружения ===
 load_dotenv()
 TOKEN = getenv("BOT_TOKEN")
 ADMINS = list(map(int, getenv("ADMINS", "").split(","))) if getenv("ADMINS") else []
 DB_PATH = getenv("DB_PATH", "reports.db")
-EMPLOYEE_CODE = str(getenv("EMPLOYEE_CODE", "0000"))  # Добавлено значение по умолчанию
+EMPLOYEE_CODE = str(getenv("EMPLOYEE_CODE", "0000"))
 
 # Логирование для проверки
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    filename="bot.log"  # Добавлено сохранение логов в файл
+    filename="bot.log"
 )
 logger = logging.getLogger(__name__)
 
 # === Инициализация бота ===
-bot = Bot(token=TOKEN, parse_mode="HTML")  # Добавлен parse_mode
+bot = Bot(
+    token=TOKEN,
+    default=DefaultBotProperties(parse_mode="HTML")  # Правильный способ для aiogram 3.x
+)
 dp = Dispatcher(storage=MemoryStorage())
 
 # Пути к видеофайлам
@@ -76,7 +80,6 @@ async def send_video(message: types.Message, video_key: str, caption: str = "") 
         logger.error(f"Ошибка при отправке видео {video_key}: {str(e)}", exc_info=True)
         await message.answer(f"⚠ Не удалось отправить видео. {caption[:1024]}")
         return False
-
 # === Клавиатуры ===
 def get_main_keyboard(is_admin: bool = False):
     if is_admin:
