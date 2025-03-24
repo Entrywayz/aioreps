@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.state import State, StatesGroup
+from pathlib import Path
+from aiogram.types import FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
@@ -51,23 +53,23 @@ async def send_video(message: types.Message, video_key: str, caption: str = "") 
         # Получаем путь к текущей директории
         current_dir = Path(__file__).parent
         video_filename = VIDEO_FILES.get(video_key)
-        
         if not video_filename:
             logging.error(f"Неизвестный ключ видео: {video_key}")
             return False
-            
-        video_path = current_dir / video_filename
         
+        video_path = current_dir / video_filename
         if not video_path.exists():
             logging.error(f"Видео файл не найден: {video_path}")
             await message.answer("⚠ Видео временно недоступно")
             return False
         
-        # Отправляем видео
-        video = InputFile(video_path)
-        await message.answer_video(video, caption=caption)
-        return True
+        # Используем FSInputFile для локальных файлов
+        video = FSInputFile(path=str(video_path))
         
+        # Отправляем видео с использованием reply_markup=None
+        await message.answer_video(video=video, caption=caption, supports_streaming=True)
+        return True
+    
     except Exception as e:
         logging.error(f"Ошибка при отправке видео {video_key}: {str(e)}")
         await message.answer(f"⚠ Не удалось отправить видео. {caption}")
