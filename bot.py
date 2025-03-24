@@ -20,19 +20,15 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemo
 load_dotenv()
 TOKEN = getenv("BOT_TOKEN")
 ADMINS = list(map(int, getenv("ADMINS", "").split(","))) if getenv("ADMINS") else []
-DB_PATH = getenv("DB_PATH"
-EMPLOYEE_CODE = str(getenv("EMPLOYEE_CODE"))
+DB_PATH = getenv("DB_PATH", "reports.db")
+EMPLOYEE_CODE = str(getenv("EMPLOYEE_CODE"))  # Убедимся, что это строка
 
 # Логирование для проверки
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    filename="bot.log"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # === Инициализация бота ===
-bot = Bot(token=TOKEN)  # Без parse_mode
+bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 # Пути к видеофайлам
@@ -44,36 +40,28 @@ VIDEO_FILES = {
     "motivation": "motivation.mp4"
 }
 
-# Проверка наличия видеофайлов при старте
-for video_key, filename in VIDEO_FILES.items():
-    if not Path(filename).exists():
-        logger.warning(f"Видеофайл {filename} для ключа {video_key} не найден!")
-
 async def send_video(message: types.Message, video_key: str, caption: str = "") -> bool:
     """Отправляет видео из локального файла"""
     try:
+        current_dir = Path(__file__).parent
         video_filename = VIDEO_FILES.get(video_key)
         if not video_filename:
             logger.error(f"Неизвестный ключ видео: {video_key}")
             return False
         
-        video_path = Path(video_filename)
+        video_path = current_dir / video_filename
         if not video_path.exists():
             logger.error(f"Видео файл не найден: {video_path}")
             await message.answer("⚠ Видео временно недоступно")
             return False
         
         video = FSInputFile(path=str(video_path))
-        await message.answer_video(
-            video=video, 
-            caption=caption[:1024],  # Ограничение длины подписи
-            supports_streaming=True
-        )
+        await message.answer_video(video=video, caption=caption, supports_streaming=True)
         return True
     
     except Exception as e:
-        logger.error(f"Ошибка при отправке видео {video_key}: {str(e)}", exc_info=True)
-        await message.answer(f"⚠ Не удалось отправить видео. {caption[:1024]}")
+        logger.error(f"Ошибка при отправке видео {video_key}: {str(e)}")
+        await message.answer(f"⚠ Не удалось отправить видео. {caption}")
         return False
 
 # === Клавиатуры ===
@@ -86,8 +74,7 @@ def get_main_keyboard(is_admin: bool = False):
                 [KeyboardButton(text="🏆 Рейтинг Сотрудников")],
                 [KeyboardButton(text="✅ Проверить Отчеты")]
             ],
-            resize_keyboard=True,
-            input_field_placeholder="Выберите действие..."
+            resize_keyboard=True
         )
     else:
         return ReplyKeyboardMarkup(
@@ -96,9 +83,14 @@ def get_main_keyboard(is_admin: bool = False):
                 [KeyboardButton(text="📊 Мои Отчеты"), KeyboardButton(text="👤 Личный Кабинет")],
                 [KeyboardButton(text="📌 Мои Задачи"), KeyboardButton(text="💪 Мотивация")]
             ],
-            resize_keyboard=True,
-            input_field_placeholder="Выберите действие..."
+            resize_keyboard=True
         )
+
+def get_back_only_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="🔙 Назад")]],
+        resize_keyboard=True
+    )
 def get_back_only_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="🔙 Назад")]],
