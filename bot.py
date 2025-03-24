@@ -1,9 +1,6 @@
 import asyncio
 import logging
 import aiosqlite
-import asyncio
-import logging
-import aiosqlite
 import os
 import aiocron
 import random
@@ -18,13 +15,12 @@ from aiogram.types import FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
-from aiogram.enums import ParseMode
 
 # === Загрузка переменных окружения ===
 load_dotenv()
 TOKEN = getenv("BOT_TOKEN")
 ADMINS = list(map(int, getenv("ADMINS", "").split(","))) if getenv("ADMINS") else []
-DB_PATH = getenv("DB_PATH", "reports.db")
+DB_PATH = getenv("DB_PATH"
 EMPLOYEE_CODE = str(getenv("EMPLOYEE_CODE"))
 
 # Логирование для проверки
@@ -36,7 +32,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # === Инициализация бота ===
-bot = Bot(token=TOKEN, parse_mode=ParseMode.HTML)
+bot = Bot(token=TOKEN)  # Без parse_mode
 dp = Dispatcher(storage=MemoryStorage())
 
 # Пути к видеофайлам
@@ -79,6 +75,7 @@ async def send_video(message: types.Message, video_key: str, caption: str = "") 
         logger.error(f"Ошибка при отправке видео {video_key}: {str(e)}", exc_info=True)
         await message.answer(f"⚠ Не удалось отправить видео. {caption[:1024]}")
         return False
+
 # === Клавиатуры ===
 def get_main_keyboard(is_admin: bool = False):
     if is_admin:
@@ -102,7 +99,6 @@ def get_main_keyboard(is_admin: bool = False):
             resize_keyboard=True,
             input_field_placeholder="Выберите действие..."
         )
-
 def get_back_only_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="🔙 Назад")]],
