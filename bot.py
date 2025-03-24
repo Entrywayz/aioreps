@@ -18,8 +18,8 @@ EMPLOYEE_CODE = str(getenv("EMPLOYEE_CODE"))
 # Словарь с video file_id
 VIDEO_MESSAGES = {
     "personal_cabinet": "lc.mp4",
-    "my_reports": "report.mp4",
-    "reports": "reports.mp4",
+    "my_reports": "reports.mp4",
+    "reports": "report.mp4",
     "tasks": "tasks.mp4",
     "motivation": "motivation.mp4"
 }
