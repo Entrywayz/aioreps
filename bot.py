@@ -207,7 +207,7 @@ async def back_handler(message: types.Message, state: FSMContext):
 @dp.message(F.text == "📝 Отправить Отчет")
 async def send_report(message: types.Message, state: FSMContext):
     res = "📸 Отправьте фото задания или просто напишите текст отчёта:"
-    await send_video(message, "reports", res)
+    await send_video(message, "my_reports", res)
     await message.answer(res, reply_markup=get_back_only_keyboard())
     await state.set_state("waiting_for_photo_or_text")
 
