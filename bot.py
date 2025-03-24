@@ -29,7 +29,8 @@ logger = logging.getLogger(__name__)
 
 # === Инициализация бота ===
 bot = Bot(token=TOKEN)
-dp = Dispatcher(storage=MemoryStorage())
+storage = MemoryStorage()
+dp = Dispatcher(storage=storage)
 
 # Пути к видеофайлам
 VIDEO_FILES = {
@@ -425,12 +426,15 @@ async def approve_report(message: types.Message, state: FSMContext):
             "SELECT user_id, report_date FROM reports WHERE id = ?",
             (report_id,)
         ) as cursor:
-            user_id, report_date = await cursor.fetchone()
+            result = await cursor.fetchone()
+            if result:
+                user_id, report_date = result
 
     await message.answer("✅ Отчёт принят.")
     
     # Уведомление сотруднику
-    await bot.send_message(user_id, f"✅ Ваш отчёт за {report_date} принят.")
+    if result:
+        await bot.send_message(user_id, f"✅ Ваш отчёт за {report_date} принят.")
     
     # Показываем следующий отчет
     await state.update_data(current_report=data.get("current_report", 0) + 1)
@@ -467,12 +471,15 @@ async def process_revision_reason(message: types.Message, state: FSMContext):
             "SELECT user_id, report_date FROM reports WHERE id = ?",
             (report_id,)
         ) as cursor:
-            user_id, report_date = await cursor.fetchone()
+            result = await cursor.fetchone()
+            if result:
+                user_id, report_date = result
 
     await message.answer("🔄 Отчёт отправлен на доработку.", reply_markup=get_approval_keyboard())
     
     # Уведомление сотруднику
-    await bot.send_message(user_id, f"🔄 Ваш отчёт за {report_date} отправлен на доработку. Причина: {reason}")
+    if result:
+        await bot.send_message(user_id, f"🔄 Ваш отчёт за {report_date} отправлен на доработку. Причина: {reason}")
     
     # Показываем следующий отчет
     await state.update_data(current_report=data.get("current_report", 0) + 1)
