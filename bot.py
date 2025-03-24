@@ -30,6 +30,26 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
+
+async def send_video(message: types.Message, video_key: str, caption: str = ""):
+    """Универсальная функция для отправки видео"""
+    video_path = os.path.join(VIDEOS_DIR, VIDEO_FILES[video_key])
+    
+    if not os.path.exists(video_path):
+        logging.error(f"Видео файл не найден: {video_path}")
+        await message.answer("⚠ Видео временно недоступно")
+        return False
+    
+    try:
+        video = InputFile(video_path)
+        await message.answer_video(video, caption=caption)
+        return True
+    except Exception as e:
+        logging.error(f"Ошибка при отправке видео: {e}")
+        await message.answer(f"⚠ Не удалось отправить видео. {caption}")
+        return False
+
+
 # === Клавиатуры ===
 def get_employee_keyboard():
     return ReplyKeyboardMarkup(
@@ -230,7 +250,6 @@ async def my_reports(message: types.Message):
 
     await message.answer(response)
 
-# === Личный Кабинет ===
 @dp.message(F.text == "👤 Личный Кабинет")
 async def personal_cabinet(message: types.Message):
     user_id = message.from_user.id
@@ -249,13 +268,15 @@ async def personal_cabinet(message: types.Message):
         total_days = (end - start).days + 1
         missed = total_days - submitted
 
-    capture = (
+    caption = (
         f"👤 Личный Кабинет\n"
         f"📊 Ваша статистика за текущую неделю:\n"
         f"✅ Сдано отчётов: {submitted}\n"
         f"❌ Пропущено отчётов: {missed}"
     )
-    await message.answer_video(user_id, VIDEO_MESSAGES["personal_cabinet"], capture)
+    
+    # Отправляем видео
+    await send_video(message, "personal_cabinet", caption)
 
 # === Мои Задачи ===
 @dp.message(F.text == "📌 Мои Задачи")
