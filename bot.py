@@ -255,7 +255,7 @@ async def personal_cabinet(message: types.Message):
         f"✅ Сдано отчётов: {submitted}\n"
         f"❌ Пропущено отчётов: {missed}"
     )
-    await message.answer_video(user_id, VIDEO_MESSAGES["personal_cabinet"], response)
+    await message.answer_video(user_id, VIDEO_MESSAGES["personal_cabinet"], capture)
 
 # === Мои Задачи ===
 @dp.message(F.text == "📌 Мои Задачи")
