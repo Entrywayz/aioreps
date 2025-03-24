@@ -15,8 +15,7 @@ from aiogram.types import FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
-from aiogram.utils.markdown import html_decoration as hd
-from aiogram.client.default import DefaultBotProperties  # Добавлено для aiogram 3.x
+from aiogram.enums.parse_mode import ParseMode
 
 # === Загрузка переменных окружения ===
 load_dotenv()
@@ -34,10 +33,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # === Инициализация бота ===
-bot = Bot(
-    token=TOKEN,
-    default=DefaultBotProperties(parse_mode="HTML")  # Правильный способ для aiogram 3.x
-)
+bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
 
 # Пути к видеофайлам
