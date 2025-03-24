@@ -324,7 +324,8 @@ async def my_tasks(message: types.Message):
     for task_type, task_text, task_date in tasks:
         response += f"📅 {task_date}\n📋 {task_type}: {task_text}\n\n"
 
-    await message.answer(response)
+    
+    await send_video(message, "tasks", response)
 
 # === Мотивация ===
 @dp.message(F.text == "💪 Мотивация")
