@@ -41,7 +41,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Инициализация бота
-bot = Bot(token=TOKEN, parse_mode="HTML")
+bot = Bot(token=TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
@@ -383,7 +383,7 @@ async def show_user_reports(message: types.Message):
     
     response = "📊 Ваши отчёты за текущую неделю:\n\n"
     for report_date, report_text, status in reports:
-        response += f"📅 <b>{report_date}</b>\n"
+        response += f"📅 {report_date}\n"
         if report_text:
             response += f"📝 {report_text}\n"
         response += f"🔄 Статус: {status}\n\n"
@@ -423,12 +423,12 @@ async def show_personal_cabinet(message: types.Message):
     missed = total_days - submitted
     
     caption = (
-        f"👤 <b>Личный Кабинет</b>\n\n"
-        f"🧑‍💼 <b>Должность:</b> {position}\n"
-        f"📅 <b>Дата регистрации:</b> {register_date}\n\n"
-        f"📊 <b>Статистика за текущую неделю:</b>\n"
-        f"✅ <b>Сдано отчётов:</b> {submitted}\n"
-        f"❌ <b>Пропущено отчётов:</b> {missed}"
+        f"👤 Личный Кабинет\n\n"
+        f"🧑‍💼 Должность: {position}\n"
+        f"📅 Дата регистрации: {register_date}\n\n"
+        f"📊 Статистика за текущую неделю:\n"
+        f"✅ Сдано отчётов: {submitted}\n"
+        f"❌ Пропущено отчётов: {missed}"
     )
     
     await send_media(message, "personal_cabinet", caption)
@@ -454,13 +454,13 @@ async def show_user_tasks(message: types.Message):
         await send_media(message, "tasks", caption)
         return
     
-    response = "📌 <b>Ваши задачи:</b>\n\n"
+    response = "📌 Ваши задачи:\n\n"
     for task_type, task_text, task_date, deadline, status in tasks:
-        response += f"📅 <b>{task_date}</b>\n"
-        response += f"📋 <b>{task_type}:</b> {task_text}\n"
+        response += f"📅 {task_date}\n"
+        response += f"📋 {task_type}: {task_text}\n"
         if deadline:
-            response += f"⏳ <b>Срок:</b> {deadline}\n"
-        response += f"🔄 <b>Статус:</b> {status}\n\n"
+            response += f"⏳ Срок: {deadline}\n"
+        response += f"🔄 Статус: {status}\n\n"
     
     await send_media(message, "tasks", response)
 
@@ -501,9 +501,9 @@ async def show_employee_rating(message: types.Message):
         await message.answer("📭 Нет данных для формирования рейтинга.")
         return
     
-    response = "🏆 <b>Рейтинг сотрудников за текущую неделю:</b>\n\n"
+    response = "🏆 Рейтинг сотрудников за текущую неделю:\n\n"
     for idx, (full_name, report_count) in enumerate(rating, start=1):
-        response += f"{idx}. {full_name}: <b>{report_count}</b> отчётов\n"
+        response += f"{idx}. {full_name}: {report_count} отчётов\n"
     
     await message.answer(response)
 
@@ -550,7 +550,7 @@ async def show_next_report(message: types.Message, state: FSMContext):
     
     report_id, full_name, photo_id, report_text, report_date = reports[current_report]
     
-    caption = f"📝 <b>Отчёт от {full_name}</b>\n📅 <b>Дата:</b> {report_date}"
+    caption = f"📝 Отчёт от {full_name}\n📅 Дата: {report_date}"
     if report_text:
         caption += f"\n\n{report_text}"
     
@@ -662,7 +662,7 @@ async def process_revision_reason(message: types.Message, state: FSMContext):
     try:
         await bot.send_message(
             user_id,
-            f"🔄 Ваш отчёт за {report_date} требует доработки.\n<b>Причина:</b> {reason}")
+            f"🔄 Ваш отчёт за {report_date} требует доработки.\nПричина: {reason}")
     except Exception as e:
         logger.error(f"Failed to notify user {user_id}: {e}")
     
@@ -767,8 +767,8 @@ async def assign_task(callback: types.CallbackQuery, state: FSMContext):
         await bot.send_message(
             user_id,
             f"📌 Вам назначена новая задача:\n\n"
-            f"<b>Тип:</b> {task_type}\n"
-            f"<b>Описание:</b> {task_text}")
+            f"Тип: {task_type}\n"
+            f"Описание: {task_text}")
     except Exception as e:
         logger.error(f"Failed to notify user {user_id}: {e}")
     
@@ -841,15 +841,15 @@ async def show_reports_for_period(message: types.Message, start_date: str, end_d
             f"📭 Нет отчетов за период с {start_date} по {end_date}.")
         return
     
-    response = f"📊 <b>Отчеты за период с {start_date} по {end_date}:</b>\n\n"
+    response = f"📊 Отчеты за период с {start_date} по {end_date}:\n\n"
     
     current_date = None
     for full_name, report_date, report_text, status in reports:
         if report_date != current_date:
-            response += f"\n📅 <b>{report_date}</b>\n"
+            response += f"\n📅 {report_date}\n"
             current_date = report_date
         
-        response += f"👤 <b>{full_name}</b>\n"
+        response += f"👤 {full_name}\n"
         if report_text:
             response += f"📝 {report_text}\n"
         response += f"🔄 {status}\n\n"
