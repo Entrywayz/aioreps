@@ -544,7 +544,7 @@ async def show_next_report(message: types.Message, state: FSMContext):
     if current_report >= len(reports):
         await message.answer(
             "✅ Все отчеты проверены.",
-            reply_markup=get_main_keyboard(is_admin=True)
+            reply_markup=get_main_keyboard(is_admin=True))
         await state.clear()
         return
     
