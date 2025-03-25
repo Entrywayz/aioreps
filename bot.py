@@ -301,7 +301,7 @@ async def back_handler(message: types.Message, state: FSMContext):
     if user_id in ADMINS:
         await message.answer(
             "Главное меню:",
-            reply_markup=get_main_keyboard(is_admin=True)
+            reply_markup=get_main_keyboard(is_admin=True))
     else:
         await message.answer(
             "Главное меню:",
